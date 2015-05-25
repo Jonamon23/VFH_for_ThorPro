@@ -5,14 +5,17 @@
 %   Goals are obtained from D*.
 % 
 % Author: Jonathon Kreska
-% Version Date: Mar 17, 2015
-% Version: 1.3
+% Version Date: May 25, 2015
+% Version: 1.4
 % 
 % Changelog:
 %  1.0: Initial Release
 %  1.1: Moved Callbacks to Separate files and folder. 
 %  1.2: Moved Tuning Parameters to different function that is called my this one
 %  1.3: Added more debugging tools
+%  1.4: Sent lidar ranges as parameter instead of a global variable.
+%       Removed more anti-goal stuff. Simplified addpath calls. 
+%       Moved tic/toc to better spot.
 % 
 % Requirements: 
 %  This machine: 
@@ -152,7 +155,7 @@ disp('Timer Ready!')
 %% Main Loop
 
 while 1
-  
+  tic
   try 
     if (lidar.ranges(1)==8.2); % test to see if lidar is available
       lidar.ranges(542); % Create Error
@@ -174,7 +177,6 @@ while 1
 %           lidar.combined(lidar.combined>3) = 3;
           
           % VFH LOOP  
-          tic
 
           if (curr.theta > pi)
             curr.theta = curr.theta - 2*pi;
@@ -184,12 +186,13 @@ while 1
           goal_heading = limitAngleRad(phi-curr.theta)*180/pi;
           % goal_dist = sqrt((goal.y - curr.y)^2+(goal.x - curr.x)^2);
 
-          anti_phi=atan2(curr.y-anti_goal.y, curr.x-anti_goal.x);
-          anti_goal_heading = limitAngleRad(anti_phi-curr.theta)*180/pi;
+%           anti_phi=atan2(curr.y-anti_goal.y, curr.x-anti_goal.x);
+%           anti_goal_heading = limitAngleRad(anti_phi-curr.theta)*180/pi;
           % anti_goal_dist = sqrt((anti_goal.y - curr.y)^2+(anti_goal.x - curr.x)^2);
           
+          lidar_ranges = lidar.combined'; % lock in ranges for this loop
 
-          VPH2015Algorithm(goal_heading, anti_goal_heading);
+          VPH2015Algorithm(lidar_ranges, goal_heading);%, anti_goal_heading);
           
             
           % DEBUG
@@ -227,10 +230,7 @@ while 1
             axis([-136 136 -.1 1.1]);
 
             drawnow
-
-            toc
-
-
+            
           end % END DEBUGGING
           %END VFH LOOP
                   
@@ -266,6 +266,7 @@ while 1
     end
   end
   
+toc
 % profile viewer
   
 end % END WHILE 1
