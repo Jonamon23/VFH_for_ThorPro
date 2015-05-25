@@ -1,11 +1,11 @@
-function VPH2015Algorithm(goal_angle, antigoal_angle)
+function VPH2015Algorithm(lidar_ranges, goal_angle) %, antigoal_angle)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Abstract:
 %  This function is an implementation of VFH+ for use on Thor Pro.
 % 
 % Updated By: Jonathon Kreska
-% Version Date: Feb 26, 2015
-% Version: 1.3
+% Version Date: May 25, 2015
+% Version: 1.4
 % 
 % Changelog:
 %  1.0: Initial Release
@@ -16,7 +16,9 @@ function VPH2015Algorithm(goal_angle, antigoal_angle)
 %       Changed many function calls to pass value of global variables.
 %       Passing by value prevents functions from changing the value and is 
 %        argued that is faster than re-initializing a global variable.
-%  1.3: 
+%  1.3: Moved small functions inside this code
+%  1.4: Added adaptive thresholding. Removed Remnants of Failed code attempts. 
+%       Consolidated Debugging into vfh_state. Set anti-goal to 0.
 % 
 % Inputs:
 %  map - lidar scan
@@ -38,10 +40,7 @@ function VPH2015Algorithm(goal_angle, antigoal_angle)
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Load in Tuning Variables and Constants
-global vfh_state lidar sector MAX Hmax Vmax Vmin;
-% global threshold_high threshold_low 
-lidar_ranges = lidar.combined'; % lock in ranges for this loop
-
+global vfh_state lidar sector MAX Hmax;
 % See 'tuneVPH.m' for variable descriptions 
 
 %% Calculate the Maximum Number of Sectors
@@ -58,12 +57,10 @@ sector.count = round((lidar.max_angle - lidar.min_angle)/sector.alpha);
 % angleToSector(x) = round((x - min_angle)/sector.alpha)
 
 %% Identify Goal Sector
-% Represent the goal direction in terms of a 5 degree quantized polar view, referred to as 
+% Represent the goal direction in terms of an alpha degree quantized polar view, referred to as 
 % the polar obstacle density (see equation 4, page 11 of VFH paper).
 goal_sector = angleToSectorFloat(goal_angle, lidar.min_angle, sector.alpha);
-% assignin('base','goal_sector',goal_sector); % DBG
-antigoal_sector = angleToSectorFloat(antigoal_angle, lidar.min_angle, sector.alpha);
-% assignin('base','antigoal_sector',antigoal_sector); % DBG
+% antigoal_sector = angleToSectorFloat(antigoal_angle, lidar.min_angle, sector.alpha);
 
 %% Obtain Previous VFH State values and parameters
 
@@ -87,9 +84,8 @@ trap_speed = []; % clear trap speed value
 
 linear_velocity = vfh_state.linear_velocity;
 angular_velocity = vfh_state.angular_velocity;
-T_high = vfh_state.T_high;
-T_low = vfh_state.T_low;
-% H_ball = vfh_state.H_ball;
+% T_high = vfh_state.T_high;  % Get previous thresholds
+% T_low = vfh_state.T_low;
 
 %% Calculate Robot Radius for current iteration
 % robot_radius = robot_radius_0mph + linear_velocity/2.23 * ...
@@ -138,7 +134,7 @@ disp(ma)
 disp(diff)
 
 
-closest_dist = 330;
+% closest_dist = 330;
 % 
 % if a < closest_dist % VFH+ can work great
 %   if a < 70
@@ -221,11 +217,11 @@ closest_dist = 330;
   end
 
 
-  % Apply threshold hysteresis
-  bin_hist(H_p_k >= T_high) = true;   
-  bin_hist(H_p_k <= T_low) = false;   % This matches VFH+ Equ 7
-  % 0 = free    1 = Blocked
-  % Otherwise, Previous value is obtained from vfh_state loading at the beginning
+% Apply threshold hysteresis
+bin_hist(H_p_k >= T_high) = true;   
+bin_hist(H_p_k <= T_low) = false;   % This matches VFH+ Equ 7
+% 0 = free    1 = Blocked
+% Otherwise, Previous value is obtained from vfh_state loading at the beginning
 
 % end
   
@@ -279,11 +275,11 @@ valleys = findValleys(bin_hist,sector.count);
 
 if (~isempty(valleys))  % If valleys are available...
   picked_sector = ...
-    pickCandidateSector(valleys, goal_sector, antigoal_sector, last_sector,...
+    pickCandidateSector(valleys, goal_sector, 0, last_sector,...
                         linear_velocity, angular_velocity, prefer_narrow,...
                         lidar.min_angle, sector.alpha, MAX);
-%   [~,index] = max(valleys(:,3));
-%   picked_sector = (valleys(index,2)-valleys(index,1))/2;
+  %   [~,index] = max(valleys(:,3));
+  %   picked_sector = (valleys(index,2)-valleys(index,1))/2;
   picked_angle = sectorToAngle(double(picked_sector), lidar.min_angle, sector.alpha);
 
 else  % There are no valleys... We are trapped
@@ -319,8 +315,8 @@ end
 
 %% Determine Speed
 [linear_velocity, angular_velocity] = ...
-  determineSpeed(H_p_k, picked_sector, linear_velocity, Hmax, Vmax,...
-                 Vmin, sector.count, lidar.min_angle, sector.alpha, MAX);
+  determineSpeed(H_p_k, picked_sector, linear_velocity, Hmax, sector.count, ...
+                 lidar.min_angle, sector.alpha, MAX);
 
 % NTU - Slow down when the vehicle gets close to bread crumbs/waypoints
 %   if (goal_dist < 1.5)
@@ -347,10 +343,9 @@ vfh_state.m = m;
 vfh_state.H_p_k = H_p_k;
 vfh_state.T_high = T_high;
 vfh_state.T_low = T_low;
-% vfh_state.H_ball = H_ball;
-
-vfh_state.valleys = valleys;
 vfh_state.picked_sector = picked_sector;
+
+% vfh_state.valleys = valleys;
 
 % Needed for next loop
 vfh_state.bin_hist = bin_hist;
