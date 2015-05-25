@@ -44,11 +44,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Setup
-clear all; close all; clc;
+rosshutdown; clear all; close all; clc;
 
-% profile ON
-
-addpath('ROS_Callback_Functions');
+% addpath('ROS_Callback_Functions');
 addpath('VPH_Functions');
 
 % Running Parameters
@@ -56,46 +54,34 @@ using_Thor_Pro = true;
 using_Breadcrumbs = false;
 using_Localization = false;
 using_Image_Processing = false;
-Debugging = true;
+Debugging = false;
 
 % Set IP address of the host where ROS master is running (roscore)
-rosMasterIp = '192.168.0.102';
-
-% Set IP address of the local IP
-localhostIp = '192.168.0.101'; 
+rosinit('192.168.0.102','NodeHost','192.168.0.101','NodeName','/VFH')
 
 % Initialize State and value variables
 tuneVPH;
+global vfh_state;
 
 % anti_goal.x=30; anti_goal.y=-30; % leave this until I remove anti-goal stuff
 
 disp('Parameters Loaded!')
 
 %% SUBSCRIBER SETUP
-% Create Subscriber Node
-global node;
-node=rosmatlab.node('VFH',rosMasterIp,11311,'rosIP',localhostIp);
 
 % LIDAR
 % Setup Subscriber Node to look for lidar scans
 global lidar;
-if using_Thor_Pro
-  lidar_sub=rosmatlab.subscriber('/scan','sensor_msgs/LaserScan',1,node);
-  % Define Callback for Lidar
-  lidar_sub.setOnNewMessageListeners({@getLidar});
-else % Stage
-  lidar_sub=rosmatlab.subscriber('/base_scan','sensor_msgs/LaserScan',1,node);
-  % Define Callback for Lidar
-  lidar_sub.setOnNewMessageListeners({@getStageLidar});
-end
+
+lidar_sub=rossubscriber('/scan',rostype.sensor_msgs_LaserScan);%,@getLidar);
+
 disp('Lidar Callback Ready')
 
 % LANES
 % Setup Subscriber Node to look for IP's Lane Line lidar scans
 global lanes;
 if using_Image_Processing
-  lanes_sub=rosmatlab.subscriber('/matlab_base_scan','sensor_msgs/LaserScan',1,node);
-  lanes_sub.setOnNewMessageListeners({@getLanes});   %Define Callback for Lanes
+  lanes_sub=rossubscriber('/matlab_base_scan',rostype.sensor_msgs_LaserScan);
   disp('Lanes Callback Ready')
 end
 
@@ -103,73 +89,98 @@ end
 % Setup Subscriber Node to look for Goal Messages
 global goal;
 if using_Breadcrumbs
-  goal_sub = rosmatlab.subscriber('/BC','geometry_msgs/Point',1,node);
-  goal_sub.setOnNewMessageListeners({@getGoal});   % Define Callback for Goal
+  goal_sub = rossubscriber('/BC',rostype.geometry_msgs_Point);
   disp('Goal Callback Ready')
 else
   goal.x = 1000; goal.y = 0; % Make a goal 100m in front of robot
 end
 
-% % Waypoint % Sundy's Deprecated GPS waypoint nav topic
-% % Setup Subscriber Node to look for Goal Messages
-% goal_sub = rosmatlab.subscriber('Goal','geometry_msgs/Point',1,node);
-% % Define Callback for Goal
-% goal_sub.setOnNewMessageListeners({@getGoal});
-% disp('Goal Callback Ready')
-
 % ODOM
 % Setup Subscriber Node to look for Odometry Messages
 global curr;
 if (using_Thor_Pro && ~using_Localization) % No Localization
-  odom_sub=rosmatlab.subscriber('/ThorPro_Drivetrain/odom','nav_msgs/Odometry',1,node);
+  odom_sub=rossubscriber('/ThorPro_Drivetrain/odom',rostype.nav_msgs_Odometry);
 elseif (using_Thor_Pro && using_Localization) % With Localization
-  odom_sub=rosmatlab.subscriber('/odom_combine','nav_msgs/Odometry',1,node);
+  odom_sub=rossubscriber('/odom_combine',rostype.nav_msgs_Odometry);
 else % You are using Stage
-  odom_sub=rosmatlab.subscriber('/odom','nav_msgs/Odometry',1,node);
+  odom_sub=rossubscriber('/odom',rostype.nav_msgs_Odometry);
 end
-odom_sub.setOnNewMessageListeners({@getOdom}); % Define Callback for Odom
 disp('Odom Callback Ready')
 
 %% PUBLISHER SETUP
 % CMD_VEL
 % Setup Publisher Node as Topic as cmd_vel controlling movement
-global cmd_vel_publisher
+% global cmd_vel_publisher
 if using_Thor_Pro
-  cmd_vel_publisher=rosmatlab.publisher('/ThorPro_Drivetrain/cmd_vel','geometry_msgs/Twist',node);
+  cmd_vel_publisher=rospublisher('/ThorPro_Drivetrain/cmd_vel','geometry_msgs/Twist');
 else % You are using Stage
-  cmd_vel_publisher=rosmatlab.publisher('/cmd_vel','geometry_msgs/Twist',node);
+  cmd_vel_publisher=rospublisher('/cmd_vel','geometry_msgs/Twist');
 end
+msg = rosmessage(cmd_vel_publisher);
 disp('Cmd_vel Ready!')  
 
 %% TIMER
-t = timer('TimerFcn',{@publishSpeed},...
-          'startDelay',1,...              % wait a second before publishing...
-          'ExecutionMode','fixedRate',... % at a fixed rate...
-          'Period', .070);                % 70msec
-start(t);
-disp('Timer Ready!')
+% t = timer('TimerFcn',{@publishSpeed},...
+%           'startDelay',1,...              % wait a second before publishing...
+%           'ExecutionMode','fixedRate',... % at a fixed rate...
+%           'Period', .50);                % 70msec
+% start(t);
+% disp('Timer Ready!')
 
 %% Main Loop
 
 while 1
   tic
-  try 
-    if (lidar.ranges(1)==25); % test to see if lidar is available
-      lidar.ranges(542); % Create unique Error
+
+  lidar.ranges = lidar_sub.LatestMessage.Ranges; % Read received data and store to ranges
+  lidar.ranges(lidar.ranges<0.01) = lidar.threshold;
+  lidar.ranges = flipud(lidar.ranges(1:540));
+  lidar.ranges(lidar.ranges>3)=lidar.threshold;
+
+  
+%   try 
+%     if lidar.ranges(1)==25 % test to see if lidar is available
+%       lidar.ranges(542); % Create unique Error
+%     end
+%     
+    odom_msg = odom_sub.LatestMessage;
+    qx=odom_msg.Pose.Pose.Orientation.X;
+    qy=odom_msg.Pose.Pose.Orientation.Y;
+    qz=odom_msg.Pose.Pose.Orientation.Z;
+    qw=odom_msg.Pose.Pose.Orientation.W;
+    axang=quat2axang([qw qx qy qz]);
+
+    curr.x=odom_msg.Pose.Pose.Position.X;
+    curr.y=odom_msg.Pose.Pose.Position.Y;
+    curr.theta=axang(4);
+  
+%     try
+%       odom_sub.LatestMessage;
+%       curr.x(1);  % test to see if Odom is available
+%       
+%       try
+%         goal.x(1);  % test to see if goals are available    
+%                
+%         try
+
+    if using_Breadcrumbs
+        goal_msg = odom_sub.LatestMessage;
+        goal.x =goal_msg.X;
+        goal.y =goal_msg.Y;
     end
-    
-    try
-      curr.x(1);  % test to see if Odom is available
-      
-      try
-        goal.x(1);  % test to see if goals are available    
-               
-        try
+        
+
           if using_Image_Processing
+            lanes.ranges = lanes_sub.LatestMessage.Ranges(1:540);
+            % Mirror lanes 45 degrees behind the robot
+            lanes.ranges(90:-1:1)=lanes.ranges(91:1:180);
+            lanes.ranges(540:-1:451)=lanes.ranges(361:1:450);
+            
             lanes.ranges(1); % test to see if IP is available 
           else 
-            lanes.ranges = lidar.ranges; % copy for code equality and simplicity
-          end            
+            lanes.ranges = lidar.ranges(1:540); % copy for code equality and simplicity
+          end   
+          
           lidar.combined = min(lidar.ranges,lanes.ranges); 
 %           lidar.combined(lidar.combined>3) = 3; 
 
@@ -189,10 +200,42 @@ while 1
 
           VPH2015Algorithm(lidar_ranges, goal_heading);%, anti_goal_heading);
           
+             if(sqrt((goal.y - curr.y)^2+(goal.x - curr.x)^2) > .3) % Until you reach the goal...
+
+                  % Extract Lin and Ang Vel
+                  linear_velocity = vfh_state.linear_velocity;
+                  angular_velocity = vfh_state.angular_velocity;
+
+                  angular_velocity_rad = angular_velocity *pi/180;
+
+                  if (linear_velocity == 0)
+                    linear_velocity = .02;
+                  end
+
+                % elseif(goal.x == [] || goal.y == []) % Not working for empty goal FIX
+                %   disp('Waiting for Replan');
+                %   linear_velocity = 0;
+                %   angular_velocity_rad = 0;
+
+             else
+
+                  disp('Waiting for new Goal');
+                  linear_velocity = 0;
+                  angular_velocity_rad = 0;
+
+             end
+
+            % Set linear and Angular Velocity and define ROS Message Types
+
+
+
+            msg.Linear.X = linear_velocity;
+            msg.Angular.Z = angular_velocity_rad;
+            send(cmd_vel_publisher,msg)
             
           % DEBUG
           if Debugging
-            global vfh_state;
+
 %             if using_Image_Processing
 %               subplot(611)
 %               plot(linspace(135,-135,length(lanes.ranges)),lanes.ranges);
@@ -228,39 +271,40 @@ while 1
             drawnow
             
           end % END DEBUGGING
-                  
-        catch ME
-          if(strcmp(ME.identifier,'MATLAB:badsubscript'))
-            warning('No Lanes')
-          else
-            rethrow(ME)
-          end   
-        end
           
-      catch ME
-        if(strcmp(ME.identifier,'MATLAB:badsubscript'))
-          warning('No Goals')
-        else
-          rethrow(ME)
-        end      
-      end
-      
-    catch ME
-      if(strcmp(ME.identifier,'MATLAB:badsubscript'))
-        warning('No Odom')
-      else
-        rethrow(ME)
-      end      
-    end
-    
-  catch ME
-    if(strcmp(ME.identifier,'MATLAB:badsubscript'))
-      warning('No Lidar')
-    else
-      rethrow(ME)
-    end
-  end
-  
+                  
+%         catch ME
+%           if(strcmp(ME.identifier,'MATLAB:badsubscript'))
+%             warning('No Lanes')
+%           else
+%             rethrow(ME)
+%           end   
+%         end
+%           
+%       catch ME
+%         if(strcmp(ME.identifier,'MATLAB:badsubscript'))
+%           warning('No Goals')
+%         else
+%           rethrow(ME)
+%         end      
+%       end
+%       
+%     catch ME
+%       if(strcmp(ME.identifier,'MATLAB:badsubscript'))
+%         warning('No Odom')
+%       else
+%         rethrow(ME)
+%       end      
+%     end
+%     
+%   catch ME
+%     if(strcmp(ME.identifier,'MATLAB:badsubscript'))
+%       warning('No Lidar')
+%     else
+%       rethrow(ME)
+%     end
+%   end
+%   
 toc
 % profile viewer
   

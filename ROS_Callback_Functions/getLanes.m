@@ -1,9 +1,9 @@
-function getLanes(lanes_msg) % Lidar Lanes Callback
+function getLanes(~,lanes_msg) % Lidar Lanes Callback
 
 global lanes;
 
-lanes.ranges = lanes_msg.getRanges;    % Read received data and store to ranges
-lanes.ranges = lanes.ranges(1:540);
+scan = lanes_msg.Ranges;    % Read received data and store to ranges
+lanes.ranges = scan(1:540);
 % Mirror lanes 45 degrees behind the robot
 lanes.ranges(90:-1:1)=lanes.ranges(91:1:180);
 lanes.ranges(540:-1:451)=lanes.ranges(361:1:450);

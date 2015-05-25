@@ -1,5 +1,5 @@
 function publishSpeed(obj,event)
-global node cmd_vel_publisher vfh_state goal curr;
+global cmd_vel_publisher vfh_state goal curr;
 
 if(sqrt((goal.y - curr.y)^2+(goal.x - curr.x)^2) > .3) % Until you reach the goal...
 
@@ -27,16 +27,9 @@ else
 end
 
 % Set linear and Angular Velocity and define ROS Message Types
-twistMsg = rosmatlab.message('geometry_msgs/Twist',node);
 
-msg_lin = twistMsg.getLinear;
-msg_ang = twistMsg.getAngular;
+msg = rosmessage(cmd_vel_publisher);
 
-% Put into respective slot in Twist msg
-msg_lin.setX(linear_velocity);
-twistMsg.setLinear(msg_lin);     % Linear Set
-
-msg_ang.setZ(angular_velocity_rad);
-twistMsg.setAngular(msg_ang);    % Angular set
-
-cmd_vel_publisher.publish(twistMsg);   % Publish velocities
+msg.Linear.X = linear_velocity;
+msg.Angular.Z = angular_velocity_rad;
+send(cmd_vel_publisher,msg)
