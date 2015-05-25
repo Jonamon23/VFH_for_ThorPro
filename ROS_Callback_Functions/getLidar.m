@@ -1,9 +1,9 @@
-function getLidar(~,lidar_msg) % Lidar Callback
+function getLidar(lidar_msg) % Lidar Callback
 
 
 global lidar;
 
-lidar.ranges = lidar_msg.Ranges; % Read received data and store to ranges
+lidar.ranges = lidar_msg.getRanges; % Read received data and store to ranges
 
 %% Thor Pro with 270 degree Lidar
 % Sick LMS111 over ethernet
