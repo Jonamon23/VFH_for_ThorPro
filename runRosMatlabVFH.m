@@ -48,14 +48,14 @@ clear all; close all; clc;
 
 % profile ON
 
-addpath('ROS_Callback_Functions')
-addpath('VPH_Functions')
+addpath('ROS_Callback_Functions');
+addpath('VPH_Functions');
 
 % Running Parameters
 using_Thor_Pro = true;
 using_Breadcrumbs = false;
 using_Localization = false;
-using_Image_Processing = true;
+using_Image_Processing = false;
 Debugging = true;
 
 % Set IP address of the host where ROS master is running (roscore)
@@ -67,9 +67,7 @@ localhostIp = '192.168.0.49';
 % Initialize State and value variables
 tuneVPH;
 
-global vfh_state;
-
-anti_goal.x=30; anti_goal.y=-30; % leave this until I remove anti-goal stuff
+% anti_goal.x=30; anti_goal.y=-30; % leave this until I remove anti-goal stuff
 
 disp('Parameters Loaded!')
 
@@ -119,7 +117,6 @@ end
 % goal_sub.setOnNewMessageListeners({@getGoal});
 % disp('Goal Callback Ready')
 
-
 % ODOM
 % Setup Subscriber Node to look for Odometry Messages
 global curr;
@@ -133,7 +130,7 @@ end
 odom_sub.setOnNewMessageListeners({@getOdom}); % Define Callback for Odom
 disp('Odom Callback Ready')
 
-%% PUBLISHER SETUPipc
+%% PUBLISHER SETUP
 % CMD_VEL
 % Setup Publisher Node as Topic as cmd_vel controlling movement
 global cmd_vel_publisher
@@ -157,8 +154,8 @@ disp('Timer Ready!')
 while 1
   tic
   try 
-    if (lidar.ranges(1)==8.2); % test to see if lidar is available
-      lidar.ranges(542); % Create Error
+    if (lidar.ranges(1)==25); % test to see if lidar is available
+      lidar.ranges(542); % Create unique Error
     end
     
     try
@@ -174,9 +171,7 @@ while 1
             lanes.ranges = lidar.ranges; % copy for code equality and simplicity
           end            
           lidar.combined = min(lidar.ranges,lanes.ranges); 
-%           lidar.combined(lidar.combined>3) = 3;
-          
-          % VFH LOOP  
+%           lidar.combined(lidar.combined>3) = 3; 
 
           if (curr.theta > pi)
             curr.theta = curr.theta - 2*pi;
@@ -186,8 +181,8 @@ while 1
           goal_heading = limitAngleRad(phi-curr.theta)*180/pi;
           % goal_dist = sqrt((goal.y - curr.y)^2+(goal.x - curr.x)^2);
 
-%           anti_phi=atan2(curr.y-anti_goal.y, curr.x-anti_goal.x);
-%           anti_goal_heading = limitAngleRad(anti_phi-curr.theta)*180/pi;
+          % anti_phi=atan2(curr.y-anti_goal.y, curr.x-anti_goal.x);
+          % anti_goal_heading = limitAngleRad(anti_phi-curr.theta)*180/pi;
           % anti_goal_dist = sqrt((anti_goal.y - curr.y)^2+(anti_goal.x - curr.x)^2);
           
           lidar_ranges = lidar.combined'; % lock in ranges for this loop
@@ -197,6 +192,7 @@ while 1
             
           % DEBUG
           if Debugging
+            global vfh_state;
 %             if using_Image_Processing
 %               subplot(611)
 %               plot(linspace(135,-135,length(lanes.ranges)),lanes.ranges);
@@ -232,7 +228,6 @@ while 1
             drawnow
             
           end % END DEBUGGING
-          %END VFH LOOP
                   
         catch ME
           if(strcmp(ME.identifier,'MATLAB:badsubscript'))
