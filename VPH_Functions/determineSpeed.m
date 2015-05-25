@@ -1,22 +1,19 @@
 function [linear, angular] = ...
-  determineSpeed(H, picked_sector, current_velocity, Hmax, Vmax, Vmin,...
+  determineSpeed(H, picked_sector, current_velocity, Hmax,...
                  sector_max, sensor_min_angle, sector_resolution, MAX)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Abstract:
 %  This function Calculates Linear and Angular Velocities of the robot
 % 
 % Updated By: Jonathon Kreska
-% Version Date: Jan 27, 2015
-% Version: 1.0
+% Version Date: May 25, 2015
+% Version: 1.1
 % 
 % Changelog:
 %  1.0: Initial Release. Added Header
+%  1.1: Changed Vmin and Vmax to global and removed from function call
 % 
 % Inputs:
-%  linear - 
-%  angular - 
-% 
-% Outputs:
 %  H - 
 %  picked_sector - 
 %  current_velocity - 
@@ -27,10 +24,15 @@ function [linear, angular] = ...
 %  sensor_min_angle - 
 %  sector_resolution -
 %  MAX -
+%
+% Outputs:
+%  linear - 
+%  angular - 
 % 
 % Usage:
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+global Vmin Vmax;
 
 MaxTurnRate = MAX.TURNRATE_0MPH - (abs(current_velocity))* ...
                 (MAX.TURNRATE_0MPH - MAX.TURNRATE_5MPH)/5;
