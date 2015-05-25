@@ -11,15 +11,10 @@ lidar.ranges = lidar_msg.getRanges;
 lidar.ranges(lidar.ranges<0.01) = lidar.threshold;
 lidar.ranges = flipud(lidar.ranges(1:540));
 lidar.ranges(lidar.ranges>3)=lidar.threshold;
-% lidar.ranges = lidar.ranges(1:540);
 
 % lidar.min_angle = -135; % Explicitly define parameters just cuz
 % lidar.max_angle = 135;
 % lidar.resolution = 0.5;
-
-
-
-
 
 %% Thor Pro (0.5 degree Resolution Interlace method)
 % Sick LMS2XX at 500K Baud
