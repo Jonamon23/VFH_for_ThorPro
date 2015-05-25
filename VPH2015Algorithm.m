@@ -84,6 +84,7 @@ trap_speed = []; % clear trap speed value
 
 linear_velocity = vfh_state.linear_velocity;
 angular_velocity = vfh_state.angular_velocity;
+
 % T_high = vfh_state.T_high;  % Get previous thresholds
 % T_low = vfh_state.T_low;
 
@@ -113,7 +114,7 @@ m = a - b*(d.^2); % certainty is 1 because we have a lidar
 m(m<0) = 0; % Prevents negative numbers
 
 %% Calculate Sector Polar Obstacle Density Histogram
-H_p_k = calcSectorPolarObstacleDensity(lidar_ranges,m);
+H_p_k = calcSectorPolarObstacleDensity(lidar_ranges,m,sector);
 % in this section we emphasize the edges of the polar histogram by increasing
 % the amplitude for the last 15 degrees = 5 sectors on the left and right.
 % the amplitude weight is higher for elements closer to the edge compared to those towards
@@ -121,17 +122,17 @@ H_p_k = calcSectorPolarObstacleDensity(lidar_ranges,m);
 H_p_k(1:5) = H_p_k(1:5).*[2 1.8 1.6 1.4 1.2];
 H_p_k(end:-1:end-4) = H_p_k(end:-1:end-4).*[2 1.8 1.6 1.4 1.2];
 
-% Jon's Hueristics for Dynamic Thresholding
-a = mean(H_p_k);
+%% Jon's Hueristics for Dynamic Thresholding
+% a = mean(H_p_k);
 mi = min(H_p_k);
 ma = max(H_p_k);
 diff = ma-mi;
 
-disp(' ')
-disp(a)
-disp(mi)
-disp(ma)
-disp(diff)
+% disp(' ')
+% disp(a)
+% disp(mi)
+% disp(ma)
+% disp(diff)
 
 
 % closest_dist = 330;
@@ -338,16 +339,10 @@ if (~isempty(valleys) && linear_velocity > 0.5) % MAG
 end
 
 %% Return the current state for next session and debugging information
-% Debug
-vfh_state.m = m;
-vfh_state.H_p_k = H_p_k;
-vfh_state.T_high = T_high;
-vfh_state.T_low = T_low;
-vfh_state.picked_sector = picked_sector;
-
-% vfh_state.valleys = valleys;
-
 % Needed for next loop
+vfh_state.linear_velocity = linear_velocity;
+vfh_state.angular_velocity = angular_velocity;
+
 vfh_state.bin_hist = bin_hist;
 
 vfh_state.prefer_narrow = prefer_narrow;
@@ -355,5 +350,11 @@ vfh_state.prefer_narrow = prefer_narrow;
 vfh_state.picked_angle = picked_angle;
 vfh_state.trap_escape_angle = trap_escape_angle;
 
-vfh_state.linear_velocity = linear_velocity;
-vfh_state.angular_velocity = angular_velocity;
+%% Debug
+vfh_state.m = m;
+vfh_state.H_p_k = H_p_k;
+vfh_state.T_high = T_high;
+vfh_state.T_low = T_low;
+vfh_state.picked_sector = picked_sector;
+
+% vfh_state.valleys = valleys;
